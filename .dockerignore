@@ -1,0 +1,6 @@
+data/
+*.gz
+*.txt
+.git
+.gitignore
+config/*.yaml
