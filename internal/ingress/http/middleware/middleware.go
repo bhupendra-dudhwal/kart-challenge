@@ -1,11 +1,11 @@
 package middleware
 
 import (
-	"kart-challenge/internal/constants"
-	"kart-challenge/internal/core/models"
-	"kart-challenge/internal/core/ports"
-	ingressPorts "kart-challenge/internal/core/ports/ingress"
-	"kart-challenge/internal/utils"
+	"github.com/bhupendra-dudhwal/kart-challenge/internal/constants"
+	"github.com/bhupendra-dudhwal/kart-challenge/internal/core/models"
+	"github.com/bhupendra-dudhwal/kart-challenge/internal/core/ports"
+	ingressPorts "github.com/bhupendra-dudhwal/kart-challenge/internal/core/ports/ingress"
+	"github.com/bhupendra-dudhwal/kart-challenge/internal/utils"
 
 	"github.com/google/uuid"
 	"github.com/valyala/fasthttp"

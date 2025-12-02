@@ -1,4 +1,4 @@
-module kart-challenge
+module github.com/bhupendra-dudhwal/kart-challenge
 
 go 1.24.5
 

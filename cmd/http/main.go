@@ -5,13 +5,14 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"kart-challenge/internal/builder"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/bhupendra-dudhwal/kart-challenge/internal/builder"
 
 	"go.uber.org/zap"
 )

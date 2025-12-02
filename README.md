@@ -49,7 +49,7 @@ Invalid promo codes
 ## Getting Started
 
 You might need to configure Git LFS to clone this repository\
-https://github.com/oolio-group/kart-challenge/tree/advanced-challenge/backend-challenge
+https://github.com/oolio-group/github.com/bhupendra-dudhwal/kart-challenge/tree/advanced-challenge/backend-challenge
 
 1. Use this repository as a template and create a new repository in your account
 2. Start coding

@@ -22,15 +22,10 @@ type fileTask struct {
 }
 
 type fileResult struct {
-	codes map[string]struct{} // unique codes in this file
+	codes map[string]struct{}
 	err   error
 }
 
-//
-// ---------- FILE PROCESSING (Parallel) -----------
-//
-
-// Reads a single file and returns unique valid promo codes found in that file
 func processFile(path string) (map[string]struct{}, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -47,7 +42,7 @@ func processFile(path string) (map[string]struct{}, error) {
 	scanner := bufio.NewScanner(gz)
 	scanner.Buffer(make([]byte, 32*1024), 1024*1024)
 
-	seen := make(map[string]struct{}) // unique codes per file
+	seen := make(map[string]struct{})
 
 	for scanner.Scan() {
 		code := scanner.Text()
@@ -59,7 +54,6 @@ func processFile(path string) (map[string]struct{}, error) {
 	return seen, scanner.Err()
 }
 
-// Runs file processing in a worker pool (parallel)
 func processFilesParallel(files []string) map[string]int {
 	workerCount := runtime.NumCPU() * 2
 
@@ -68,7 +62,6 @@ func processFilesParallel(files []string) map[string]int {
 
 	var wg sync.WaitGroup
 
-	// Start workers
 	for w := 0; w < workerCount; w++ {
 		wg.Add(1)
 		go func() {
@@ -80,7 +73,6 @@ func processFilesParallel(files []string) map[string]int {
 		}()
 	}
 
-	// Send jobs
 	go func() {
 		for _, f := range files {
 			jobs <- fileTask{path: f}
@@ -88,7 +80,6 @@ func processFilesParallel(files []string) map[string]int {
 		close(jobs)
 	}()
 
-	// Close results after work finish
 	go func() {
 		wg.Wait()
 		close(results)
@@ -96,7 +87,6 @@ func processFilesParallel(files []string) map[string]int {
 
 	counts := make(map[string]int)
 
-	// Merge results
 	for res := range results {
 		if res.err != nil {
 			continue
@@ -109,11 +99,6 @@ func processFilesParallel(files []string) map[string]int {
 	return counts
 }
 
-//
-// ---------- HASH SYSTEM (Parallel) -----------
-//
-
-// Hash single file
 func computeFileHash(path string) (string, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -128,7 +113,6 @@ func computeFileHash(path string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-// Parallel file hashing
 func computeCombinedHash(files []string) (string, error) {
 	type hashRes struct {
 		h   string
@@ -164,10 +148,6 @@ func computeCombinedHash(files []string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-//
-// ---------- CACHE SYSTEM -----------
-//
-
 func writeHash(h string) error {
 	return os.WriteFile(hashFile, []byte(h), 0644)
 }
@@ -202,15 +182,6 @@ func loadCache() (PromoSet, error) {
 	return codes, nil
 }
 
-//
-// ---------- MAIN BOOT LOGIC -----------
-//
-
-// BootPromoSystem:
-// 1. Computes combined file hash (parallel)
-// 2. If unchanged → load cache
-// 3. Else read all files (parallel worker pool)
-// 4. Save valid promo codes where code appears in at least TWO FILES
 func BootPromoSystem(files []string) (PromoSet, error) {
 
 	currentHash, err := computeCombinedHash(files)
@@ -223,12 +194,11 @@ func BootPromoSystem(files []string) (PromoSet, error) {
 		return loadCache()
 	}
 
-	// Process files in parallel
 	countMap := processFilesParallel(files)
 
 	valid := make(PromoSet)
 	for code, count := range countMap {
-		if count >= 2 { // appears in at least 2 different files
+		if count >= 2 {
 			valid[code] = struct{}{}
 		}
 	}
