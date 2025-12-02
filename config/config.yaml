@@ -1,0 +1,12 @@
+app:
+  environment: production
+  port: 8081
+  gracefulShutdownTime: 10s
+
+logger:
+  level: info
+
+apiKey:
+  enabled: true
+  allowedApiKeys: 
+    apitest: true

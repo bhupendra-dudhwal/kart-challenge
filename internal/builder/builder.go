@@ -1,0 +1,138 @@
+package builder
+
+import (
+	"bytes"
+	"context"
+	"fmt"
+	"kart-challenge/internal/core/models"
+	"kart-challenge/internal/core/services"
+	"kart-challenge/internal/ingress/http/handler"
+	"kart-challenge/internal/ingress/http/middleware"
+	"kart-challenge/internal/utils"
+	"kart-challenge/pkg/logger"
+	"log"
+	"os"
+	"path/filepath"
+	"time"
+
+	"kart-challenge/internal/core/ports"
+	ingressPorts "kart-challenge/internal/core/ports/ingress"
+
+	"github.com/valyala/fasthttp"
+	"go.uber.org/zap"
+	"gopkg.in/yaml.v3"
+)
+
+type AppBuilder struct {
+	ctx context.Context
+
+	config *models.Config
+	logger ports.LoggerPorts
+
+	handler fasthttp.RequestHandler
+	server  *fasthttp.Server
+
+	orderServicePorts   ingressPorts.OrderServicePorts
+	productServicePorts ingressPorts.ProductServicePorts
+}
+
+func NewAppBuilder(ctx context.Context) *AppBuilder {
+	return &AppBuilder{
+		ctx:    ctx,
+		server: &fasthttp.Server{},
+	}
+}
+
+func (a *AppBuilder) LoadConfig(configFile string) error {
+	start := time.Now()
+	log.Println("Initializing config")
+	// configFile = os.ExpandEnv(configFile)
+
+	absPath, err := filepath.Abs(configFile)
+	if err != nil {
+		return fmt.Errorf("failed to resolve absolute config path: %w", err)
+	}
+
+	if err := utils.FileExists(absPath); err != nil {
+		return err
+	}
+
+	switch ext := filepath.Ext(absPath); ext {
+	case ".yaml", ".yml":
+	default:
+		return fmt.Errorf("invalid file extension '%s', expected .yaml or .yml", ext)
+	}
+
+	configBytes, err := os.ReadFile(absPath)
+	if err != nil {
+		return fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	var cfg models.Config
+	decoder := yaml.NewDecoder(bytes.NewReader(configBytes))
+	decoder.KnownFields(true)
+
+	if err := decoder.Decode(&cfg); err != nil {
+		return fmt.Errorf("failed to unmarshal config: %w", err)
+	}
+
+	if err := cfg.Validate(); err != nil {
+		return fmt.Errorf("config validation failed: %w", err)
+	}
+
+	a.config = &cfg
+	log.Printf("Config loaded successfully from %s, duration(Micro Sec): %d\n", absPath, time.Since(start).Microseconds())
+	return nil
+}
+
+func (a *AppBuilder) SetLogger() (ports.LoggerPorts, error) {
+	start := time.Now()
+	log.Println("Initializing logger")
+	loggerPorts, err := logger.NewLogger(a.config.Logger.Level, a.config.App.Environment)
+	if err != nil {
+		return nil, err
+	}
+	a.logger = loggerPorts
+	loggerPorts.Info("Logger initialized successfully",
+		zap.String("level", a.config.Logger.Level.String()), zap.String("environment", a.config.App.Environment.String()),
+		zap.Int64("duration(Micro Sec)", time.Since(start).Microseconds()),
+	)
+	return loggerPorts, nil
+}
+
+func (a *AppBuilder) SetServices() error {
+	start := time.Now()
+	a.logger.Info("Initializing services", zap.String("component", "app_builder"), zap.String("step", "SetServices"))
+
+	a.orderServicePorts = services.NewOrderService(a.config, a.logger)
+	a.productServicePorts = services.NewProductService(a.config, a.logger)
+
+	a.logger.Info("Services initialized successfully",
+		zap.String("component", "app_builder"), zap.String("step", "SetServices"),
+		zap.Int64("duration(Micro Sec)", time.Since(start).Microseconds()),
+	)
+	return nil
+}
+
+func (a *AppBuilder) SetHandlers() error {
+	start := time.Now()
+	a.logger.Info("Initializing handlers", zap.String("component", "app_builder"), zap.String("step", "SetHandlers"))
+
+	middlewarePorts := middleware.NewMiddleware(a.config, a.logger)
+
+	routes, handlerObj := handler.NewHandler(a.config, a.logger, middlewarePorts)
+	handlerObj.SetProductHandler(a.productServicePorts)
+	handlerObj.SetOrderHandler(a.orderServicePorts)
+
+	a.handler = routes
+	a.logger.Info("Handlers initialized successfully",
+		zap.String("component", "app_builder"), zap.String("step", "SetHandlers"),
+		zap.Int64("duration(Micro Sec)", time.Since(start).Microseconds()),
+	)
+	return nil
+}
+
+func (a *AppBuilder) Build() (*fasthttp.Server, *models.App) {
+	a.server.Handler = a.handler
+	return a.server, a.config.App
+}
