@@ -72,3 +72,22 @@ const (
 func (key HeaderKey) String() string {
 	return string(key)
 }
+
+type AllowedCharacters string
+
+const (
+	Uppercase    AllowedCharacters = "uppercase"
+	Alphanumeric AllowedCharacters = "alphanumeric"
+	Lowercase    AllowedCharacters = "lowercase"
+	Letters      AllowedCharacters = "letters"
+	Digits       AllowedCharacters = "digits"
+)
+
+func (key AllowedCharacters) IsValid() bool {
+	switch key {
+	case Uppercase, Alphanumeric, Letters, Lowercase, Digits:
+		return true
+	default:
+		return false
+	}
+}

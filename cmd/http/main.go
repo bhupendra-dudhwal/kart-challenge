@@ -36,6 +36,10 @@ func main() {
 	}
 	defer logger.Close()
 
+	if err := appBuilder.SetRedisClientrepository(); err != nil {
+		log.Fatalf("failed to initialize redis: %+v", err)
+	}
+
 	appBuilder.SetServices()
 	appBuilder.SetHandlers()
 

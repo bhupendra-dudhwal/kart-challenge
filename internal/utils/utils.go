@@ -1,11 +1,16 @@
 package utils
 
 import (
+	"compress/gzip"
 	"context"
 	"fmt"
+	"io"
 	"os"
+	"strings"
+	"sync"
 
 	"github.com/bhupendra-dudhwal/kart-challenge/internal/constants"
+	"github.com/bhupendra-dudhwal/kart-challenge/internal/core/models"
 
 	"github.com/valyala/fasthttp"
 )
@@ -68,4 +73,110 @@ func convert[T any](v []byte) (T, bool) {
 	default:
 		return zero, false
 	}
+}
+
+var gzipReaderPool = sync.Pool{
+	New: func() any { return new(gzip.Reader) },
+}
+
+func Unzip(gzFile, sourceExt, destExt string) error {
+	destFile := strings.TrimSuffix(gzFile, sourceExt) + destExt
+
+	if _, err := os.Stat(destFile); err == nil {
+		return nil
+	}
+
+	tmp := destFile + ".tmp"
+
+	if err := unzipGZ(gzFile, tmp); err != nil {
+		_ = os.Remove(tmp)
+		return fmt.Errorf("failed to unzip %s: %w", gzFile, err)
+	}
+
+	return os.Rename(tmp, destFile)
+}
+
+func unzipGZ(src, dst string) error {
+	f, err := os.Open(src)
+	if err != nil {
+		return fmt.Errorf("open src: %w", err)
+	}
+	defer f.Close()
+
+	gz := gzipReaderPool.Get().(*gzip.Reader)
+	if err := gz.Reset(f); err != nil {
+		gzipReaderPool.Put(gz)
+		return fmt.Errorf("gzip reset: %w", err)
+	}
+	defer func() {
+		gz.Close()
+		gzipReaderPool.Put(gz)
+	}()
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return fmt.Errorf("create dst: %w", err)
+	}
+	defer out.Close()
+
+	buf := make([]byte, 1*1024*1024)
+
+	_, err = io.CopyBuffer(out, gz, buf)
+	return err
+}
+
+func Max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func isUpper(ch byte) bool { return ch >= 'A' && ch <= 'Z' }
+func isLower(ch byte) bool { return ch >= 'a' && ch <= 'z' }
+func isDigit(ch byte) bool { return ch >= '0' && ch <= '9' }
+
+func ValidateCode(code string, cfg *models.CouponValidator) bool {
+	ln := len(code)
+
+	if ln < cfg.MinLength || ln > cfg.MaxLength {
+		return false
+	}
+
+	for i := 0; i < ln; i++ {
+		ch := code[i]
+
+		switch cfg.AllowedCharacters {
+
+		case constants.Alphanumeric:
+			if !(isUpper(ch) || isLower(ch) || isDigit(ch)) {
+				return false
+			}
+
+		case constants.Digits:
+			if !isDigit(ch) {
+				return false
+			}
+
+		case constants.Letters:
+			if !(isUpper(ch) || isLower(ch)) {
+				return false
+			}
+
+		case constants.Uppercase:
+			if !isUpper(ch) {
+				return false
+			}
+
+		case constants.Lowercase:
+			if !isLower(ch) {
+				return false
+			}
+
+		default:
+			return false
+		}
+	}
+
+	return true
 }

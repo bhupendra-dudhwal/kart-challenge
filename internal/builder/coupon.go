@@ -2,228 +2,159 @@ package builder
 
 import (
 	"bufio"
-	"compress/gzip"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
-	"errors"
-	"hash/fnv"
-	"io"
-	"io/fs"
+	"fmt"
+	"log"
 	"os"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
+	"time"
+
+	"github.com/bhupendra-dudhwal/kart-challenge/internal/utils"
+	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 )
 
-const cacheFile = "promo_cache.json"
-const hashFile = "promo_hash.txt"
+func (b *appBuilder) processCouponData() error {
+	start := time.Now()
+	b.logger.Info("processCouponData starts")
+	unzipErrs, fatalErr := b.unzip(b.config.CouponConfig.Files)
+	if fatalErr != nil {
+		return fatalErr
+	}
 
-type PromoSet map[string]struct{}
+	if len(unzipErrs) > 0 && !b.config.CouponConfig.IgnoreUnzipErrors {
+		return fmt.Errorf("failed to unzip %d coupon files: %v", len(unzipErrs), unzipErrs)
+	}
 
-func CollectGzipFiles(root string) ([]string, error) {
-	var files []string
-	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if !d.IsDir() && strings.HasSuffix(strings.ToLower(d.Name()), ".gz") {
-			files = append(files, path)
-		}
-		return nil
-	})
-	return files, err
+	b.logger.Info("processCouponData completes successfully", zap.Int64("duration(Micro Sec)", time.Since(start).Microseconds()))
+
+	start = time.Now()
+	b.logger.Info("buildFrequency starts")
+	b.processValidData()
+	b.logger.Info("buildFrequency completes successfully", zap.Int64("duration(Micro Sec)", time.Since(start).Microseconds()))
+
+	return nil
 }
 
-func computeCombinedHash(files []string) (string, error) {
-	h := sha256.New()
+func (b *appBuilder) unzip(files []string) (unzipErrs []error, executionErr error) {
+	var (
+		g    errgroup.Group
+		mu   sync.Mutex
+		errs []error
+	)
 
-	for _, path := range files {
-		f, err := os.Open(path)
-		if err != nil {
-			return "", err
-		}
-		_, err = io.Copy(h, f)
-		f.Close()
-		if err != nil {
-			return "", err
+	maxCpus := utils.Max(1, runtime.NumCPU()/2)
+
+	g.SetLimit(maxCpus)
+
+	for _, file := range files {
+		f := file
+		g.Go(func() error {
+			if err := utils.Unzip(f, ".gz", ".txt"); err != nil {
+				mu.Lock()
+				errs = append(errs, fmt.Errorf("unzip failed for %s: %w", f, err))
+				mu.Unlock()
+			}
+			return nil
+		})
+	}
+
+	executionErr = g.Wait()
+
+	return errs, executionErr
+}
+
+func (b *appBuilder) processValidData() {
+	out := make(chan map[string]bool, len(b.config.CouponConfig.Files))
+
+	for _, file := range b.config.CouponConfig.Files {
+		txtFile := strings.TrimSuffix(file, ".gz") + ".txt"
+		go b.parseFile(txtFile, out)
+	}
+
+	freq := make(map[string]int)
+	seenFinal := make(map[string]bool)
+	batch := make([]string, 0, b.config.CouponConfig.BatchSize)
+
+	for i := 0; i < len(b.config.CouponConfig.Files); i++ {
+		fileMap := <-out
+
+		for code := range fileMap {
+			if seenFinal[code] {
+				continue
+			}
+
+			freq[code]++
+			if freq[code] == 2 {
+				batch = append(batch, code)
+				seenFinal[code] = true
+				delete(freq, code)
+			}
+
+			if len(batch) >= b.config.CouponConfig.BatchSize {
+				b.flushToRedis(batch)
+				batch = batch[:0]
+			}
 		}
 	}
 
-	return hex.EncodeToString(h.Sum(nil)), nil
+	if len(batch) > 0 {
+		b.flushToRedis(batch)
+	}
 }
 
-func writeHash(h string) error {
-	return os.WriteFile(hashFile, []byte(h), 0644)
-}
+func (b *appBuilder) parseFile(filename string, out chan<- map[string]bool) {
+	seen := make(map[string]bool)
 
-func readStoredHash() (string, error) {
-	b, err := os.ReadFile(hashFile)
+	f, err := os.Open(filename)
 	if err != nil {
-		return "", err
-	}
-	return string(b), nil
-}
-
-const shardCount = 256
-
-type shard struct {
-	sync.Mutex
-	m map[string]int
-}
-
-var counterShards [shardCount]*shard
-
-func init() {
-	for i := range counterShards {
-		counterShards[i] = &shard{m: make(map[string]int)}
-	}
-}
-
-func addCode(code string) {
-	h := fnv.New32a()
-	h.Write([]byte(code))
-	idx := h.Sum32() % shardCount
-	s := counterShards[idx]
-
-	s.Lock()
-	s.m[code]++
-	s.Unlock()
-}
-
-var gzipPool = sync.Pool{
-	New: func() any { return new(gzip.Reader) },
-}
-
-func processFile(path string) error {
-	f, err := os.Open(path)
-	if err != nil {
-		return err
+		log.Fatalf("Failed to open %s: %v", filename, err)
 	}
 	defer f.Close()
 
-	// Big buffered reader for large files
-	buf := bufio.NewReaderSize(f, 4*1024*1024)
-
-	// Reuse gzip reader from pool
-	gz := gzipPool.Get().(*gzip.Reader)
-	if err := gz.Reset(buf); err != nil {
-		gzipPool.Put(gz)
-		return err
-	}
-	defer func() {
-		gz.Close()
-		gzipPool.Put(gz)
-	}()
-
-	scanner := bufio.NewScanner(gz)
-	scanner.Buffer(make([]byte, 64*1024), 4*1024*1024)
-
-	seen := make(map[string]struct{})
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 1024*1024), 32*1024*1024)
 
 	for scanner.Scan() {
-		code := scanner.Text()
-
-		if len(code) >= 8 && len(code) <= 10 {
-			seen[code] = struct{}{}
+		code := strings.TrimSpace(scanner.Text())
+		if utils.ValidateCode(code, b.config.CouponConfig.Validation) {
+			seen[code] = true
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return err
+		log.Fatalf("Scan error %s: %v", filename, err)
 	}
 
-	for code := range seen {
-		addCode(code)
-	}
-
-	return nil
+	out <- seen
 }
 
-func processFilesParallel(files []string) error {
-	workerCount := runtime.NumCPU() * 2
-
-	jobs := make(chan string, len(files))
-	var wg sync.WaitGroup
-
-	for w := 0; w < workerCount; w++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for path := range jobs {
-				if err := processFile(path); err != nil {
-
-				}
-			}
-		}()
+func (b *appBuilder) flushToRedis(batch []string) error {
+	if len(batch) == 0 {
+		return nil
 	}
 
-	for _, f := range files {
-		jobs <- f
-	}
-	close(jobs)
-
-	wg.Wait()
-	return nil
-}
-
-func saveCache(codes PromoSet) error {
-	b, err := json.MarshalIndent(codes, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(cacheFile, b, 0644)
-}
-
-func loadCache() (PromoSet, error) {
-	b, err := os.ReadFile(cacheFile)
-	if err != nil {
-		return nil, err
-	}
-	var codes PromoSet
-	if err := json.Unmarshal(b, &codes); err != nil {
-		return nil, err
-	}
-	return codes, nil
-}
-
-func BootPromoSystem(files []string) (PromoSet, error) {
-
-	if len(files) == 0 {
-		return nil, errors.New("no files provided")
+	args := make([]interface{}, 0, len(batch)+2)
+	args = append(args, "BF.MADD", b.config.CouponConfig.BloomKey)
+	for _, code := range batch {
+		args = append(args, code)
 	}
 
-	currentHash, err := computeCombinedHash(files)
-	if err != nil {
-		return nil, err
-	}
-
-	if storedHash, err := readStoredHash(); err == nil && storedHash == currentHash {
-		return loadCache()
-	}
-
-	if err := processFilesParallel(files); err != nil {
-		return nil, err
-	}
-
-	valid := make(PromoSet)
-
-	for _, s := range counterShards {
-		s.Lock()
-		for code, count := range s.m {
-			if count >= 2 {
-				valid[code] = struct{}{}
-			}
+	if err := b.cacheRepository.Do(b.ctx, args); err != nil {
+		if !b.config.CouponConfig.IgnoreUnzipErrors {
+			return fmt.Errorf("redis BF.MADD error: %w", err)
 		}
-		s.Unlock()
 	}
 
-	if err := saveCache(valid); err != nil {
-		return nil, err
-	}
-	if err := writeHash(currentHash); err != nil {
-		return nil, err
+	members := make([]interface{}, len(batch))
+	for i, v := range batch {
+		members[i] = v
 	}
 
-	return valid, nil
+	if err := b.cacheRepository.SAdd(b.ctx, b.config.CouponConfig.ExactSet, members...); err != nil {
+		if !b.config.CouponConfig.IgnoreUnzipErrors {
+			return fmt.Errorf("redis BF.MADD error: %w", err)
+		}
+	}
+	return nil
 }
