@@ -3,8 +3,9 @@ package utils
 import (
 	"context"
 	"fmt"
-	"kart-challenge/internal/constants"
 	"os"
+
+	"github.com/bhupendra-dudhwal/kart-challenge/internal/constants"
 
 	"github.com/valyala/fasthttp"
 )

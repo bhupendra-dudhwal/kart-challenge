@@ -3,8 +3,9 @@ package logger
 import (
 	"context"
 	"fmt"
-	"kart-challenge/internal/constants"
-	"kart-challenge/internal/core/ports"
+
+	"github.com/bhupendra-dudhwal/kart-challenge/internal/constants"
+	"github.com/bhupendra-dudhwal/kart-challenge/internal/core/ports"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"

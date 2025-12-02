@@ -1,9 +1,9 @@
 package handler
 
 import (
-	"kart-challenge/internal/core/models"
-	"kart-challenge/internal/core/ports"
-	ingressPorts "kart-challenge/internal/core/ports/ingress"
+	"github.com/bhupendra-dudhwal/kart-challenge/internal/core/models"
+	"github.com/bhupendra-dudhwal/kart-challenge/internal/core/ports"
+	ingressPorts "github.com/bhupendra-dudhwal/kart-challenge/internal/core/ports/ingress"
 
 	"github.com/fasthttp/router"
 	"github.com/valyala/fasthttp"

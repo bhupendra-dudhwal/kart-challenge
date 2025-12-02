@@ -2,8 +2,9 @@ package models
 
 import (
 	"fmt"
-	"kart-challenge/internal/constants"
 	"time"
+
+	"github.com/bhupendra-dudhwal/kart-challenge/internal/constants"
 
 	validation "github.com/go-ozzo/ozzo-validation/v4"
 )
