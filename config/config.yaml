@@ -1,7 +1,10 @@
 app:
   environment: production
-  port: 8081
-  gracefulShutdownTime: 10s
+
+  server:
+    gracefulShutdownTime: 10s
+    compression: true
+    port: 8081
 
 logger:
   level: info
@@ -13,7 +16,9 @@ apiKey:
 
 cache:
   name: 1
+  # host: kart-cache
   host: localhost
+  password: password
   port: 6379
   poolSize: 20
   minIdleConns: 5
@@ -24,8 +29,25 @@ cache:
   retryInterval: 10s
   ttl: 10m 
 
+database:
+  debug: true
+  name: kart_challenge
+  # host:  kart-db
+  host:  localhost
+  username: admin
+  password: password
+  port: 5432
+  # timezone: Asia/Kolkata
+  sslmode: disable
+  maxIdleConns: 100
+  maxOpenConns: 500
+  connMaxLife: 2m
+  connMaxIdle: 1m
+  connectRetries: 3
+  retryInterval: 10s
+
 couponConfig:
-  ignoreUnzipErrors: true
+  ignoreUnzipErrors: false
   bloomKey: promo_filter
   exactSet: promo_exact
   batchSize: 1000

@@ -37,16 +37,30 @@ func main() {
 	defer logger.Close()
 
 	if err := appBuilder.SetRedisClientrepository(); err != nil {
-		log.Fatalf("failed to initialize redis: %+v", err)
+		logger.Error("failed to initialize redis", zap.Error(err))
+		os.Exit(1)
 	}
 
+	if err := appBuilder.SetDatabaseRepository(); err != nil {
+		logger.Error("failed to initialize database", zap.Error(err))
+		os.Exit(1)
+	}
+
+	// if err := appBuilder.ProcessCouponData(); err != nil {
+	// 	logger.Error("coupon data procesiong error", zap.Error(err))
+	// 	os.Exit(1)
+	// }
+
 	appBuilder.SetServices()
-	appBuilder.SetHandlers()
+
+	if err := appBuilder.SetHandlers(); err != nil {
+		logger.Error("failed to set handlers", zap.Error(err))
+		os.Exit(1)
+	}
 
 	server, appConfig := appBuilder.Build()
 
-	addr := fmt.Sprintf(":%d", appConfig.Port)
-
+	addr := fmt.Sprintf(":%d", appConfig.Server.Port)
 	logger.Info("Starting server", zap.String("addr", addr), zap.String("environment", appConfig.Environment.String()), zap.Int64("builder duration(Micro Sec)", time.Since(start).Microseconds()))
 	go func() {
 		if err := server.ListenAndServe(addr); err != nil && err != http.ErrServerClosed {
@@ -61,7 +75,7 @@ func main() {
 	sig := <-stop
 	logger.Info("Shutdown signal received", zap.String("signal", sig.String()))
 
-	shutdownCtx, cancel := context.WithTimeoutCause(ctx, 10*time.Second, errors.New("server interrupt by os signal"))
+	shutdownCtx, cancel := context.WithTimeoutCause(ctx, appConfig.Server.GracefulShutdownTime, errors.New("server interrupt by os signal"))
 	defer cancel()
 
 	if err := server.ShutdownWithContext(shutdownCtx); err != nil {
