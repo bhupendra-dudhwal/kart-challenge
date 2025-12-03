@@ -134,15 +134,19 @@ docker compose up -d --build kart-db
 ```
 
 2. Run Migrations
-This will create required tables and seed product data:
-make migration
 
+This will create required tables and seed product data:
+```
+ make migration
+```
 
 3. Build & Run the Service
-make build && make run
-
+   ```
+   make build && make run
+   ```
 
 # Coupon Code System (Bloom Filters)
+
 During application boot:
 
 1. .gz coupon files are uncompressed to .txt
@@ -154,11 +158,18 @@ During application boot:
 In production, this can be moved to a separate ETL pipeline.
 
 # API Documentation
+
 OpenAPI Spec
-docs/openapi/openapi.yaml
+
+```
+   docs/openapi/openapi.yaml
+```
 
 Postman Collection
-docs/postman/kart-oolio.postman_collection.json
+
+```
+ docs/postman/kart-oolio.postman_collection.json
+```
 
 # Available APIs
 | Endpoint         | Method | Description               |
