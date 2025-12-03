@@ -25,7 +25,7 @@ A high-performance backend service built in Go, featuring a clean hexagonal arch
 Coupon codes are preprocessed during boot and stored in Redis using Bloom filters for O(1) lookup.
 
 # Project Structure
-.
+```.
 ├── cmd
 │   ├── http
 │   │   └── main.go
@@ -107,7 +107,7 @@ Coupon codes are preprocessed during boot and stored in Redis using Bloom filter
 │   └── logger
 │       └── logger.go
 └── README.md
-
+```
 # Configuration
 All env variables & ports can be modified in:
 - config/config.yaml
