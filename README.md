@@ -109,17 +109,26 @@ Coupon codes are preprocessed during boot and stored in Redis using Bloom filter
 └── README.md
 ```
 # Configuration
+
 All env variables & ports can be modified in:
-```config/config.yaml```
+
+```
+config/config.yaml
+```
+
 You may update ports if something is already in use.
 
 # Running the Service – Docker (Recommended)
 Brings up Postgres, Redis, and the Go service automatically.
 
 Start services 
- ```make up```
+ ```
+make up
+```
 Stop services
- ```make down```
+```
+make down
+```
 
 # Running Locally (Without Docker)
 1. Start Redis & PostgreSQL
@@ -137,13 +146,13 @@ docker compose up -d --build kart-db
 
 This will create required tables and seed product data:
 ```
- make migration
+make migration
 ```
 
 3. Build & Run the Service
-   ```
-   make build && make run
-   ```
+```
+make build && make run
+```
 
 # Coupon Code System (Bloom Filters)
 
