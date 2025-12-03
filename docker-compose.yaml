@@ -1,0 +1,70 @@
+version: "3.9"
+
+services:
+
+  kart-db:
+    image: postgres:16
+    container_name: kart-db
+    hostname: kart-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: kart_challenge
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - kart-networks
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d tyroo_central"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  kart-cache:
+    image: redislabs/rebloom:latest
+    container_name: kart-cache
+    hostname: kart-cache
+    restart: unless-stopped
+    environment:
+      - REDIS_PASSWORD=password
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - kart-networks
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "password", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      
+  kart-challenge:
+    build: .
+    container_name: kart-app
+    hostname: kart-app
+    depends_on:
+      kart-cache:
+        condition: service_healthy
+      kart-db:
+        condition: service_healthy
+    volumes:
+      - ./config/config.yaml:/app/config/config.yaml
+      - ./data:/app/data:ro
+    ports:
+      - "8081:8081"
+    networks:
+      - kart-networks
+    restart: unless-stopped
+
+networks:
+  kart-networks:
+    driver: bridge
+
+volumes:
+  redis-data:
+  postgres-data:
