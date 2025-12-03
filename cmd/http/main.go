@@ -46,10 +46,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	// if err := appBuilder.ProcessCouponData(); err != nil {
-	// 	logger.Error("coupon data procesiong error", zap.Error(err))
-	// 	os.Exit(1)
-	// }
+	if err := appBuilder.ProcessCouponData(); err != nil {
+		logger.Error("coupon data procesiong error", zap.Error(err))
+		os.Exit(1)
+	}
 
 	appBuilder.SetServices()
 

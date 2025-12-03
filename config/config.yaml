@@ -16,8 +16,8 @@ apiKey:
 
 cache:
   name: 1
-  # host: kart-cache
-  host: localhost
+  host: kart-cache
+  # host: localhost
   password: password
   port: 6379
   poolSize: 20
@@ -32,8 +32,8 @@ cache:
 database:
   debug: true
   name: kart_challenge
-  # host:  kart-db
-  host:  localhost
+  host:  kart-db
+  # host:  localhost
   username: admin
   password: password
   port: 5432
