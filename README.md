@@ -171,13 +171,13 @@ In production, this can be moved to a separate ETL pipeline.
 OpenAPI Spec
 
 ```
-   docs/openapi/openapi.yaml
+docs/openapi/openapi.yaml
 ```
 
 Postman Collection
 
 ```
- docs/postman/kart-oolio.postman_collection.json
+docs/postman/kart-oolio.postman_collection.json
 ```
 
 # Available APIs
