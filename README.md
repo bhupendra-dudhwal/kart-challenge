@@ -110,7 +110,7 @@ Coupon codes are preprocessed during boot and stored in Redis using Bloom filter
 ```
 # Configuration
 All env variables & ports can be modified in:
-- config/config.yaml
+  config/config.yaml
 You may update ports if something is already in use.
 
 # Running the Service – Docker (Recommended)
