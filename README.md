@@ -115,10 +115,11 @@ You may update ports if something is already in use.
 
 # Running the Service – Docker (Recommended)
 Brings up Postgres, Redis, and the Go service automatically.
-Start services
-```make up```
+
+Start services 
+ ```make up```
 Stop services
-```make down```
+ ```make down```
 
 # Running Locally (Without Docker)
 1. Start Redis & PostgreSQL
@@ -126,8 +127,11 @@ Stop services
 Option A – Install locally
 Or
 Option B – Use Docker Compose:
+
+```
 docker compose up -d --build kart-cache
 docker compose up -d --build kart-db
+```
 
 2. Run Migrations
 This will create required tables and seed product data:
