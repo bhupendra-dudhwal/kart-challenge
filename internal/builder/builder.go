@@ -12,11 +12,14 @@ import (
 	"github.com/bhupendra-dudhwal/kart-challenge/internal/core/models"
 	"github.com/bhupendra-dudhwal/kart-challenge/internal/core/services"
 	"github.com/bhupendra-dudhwal/kart-challenge/internal/egress/cache"
-	"github.com/bhupendra-dudhwal/kart-challenge/internal/egress/repository"
+	cacheRepository "github.com/bhupendra-dudhwal/kart-challenge/internal/egress/cache/repository"
+	"github.com/bhupendra-dudhwal/kart-challenge/internal/egress/database"
+	databaseRepository "github.com/bhupendra-dudhwal/kart-challenge/internal/egress/database/repository"
 	"github.com/bhupendra-dudhwal/kart-challenge/internal/ingress/http/handler"
 	"github.com/bhupendra-dudhwal/kart-challenge/internal/ingress/http/middleware"
 	"github.com/bhupendra-dudhwal/kart-challenge/internal/utils"
 	"github.com/bhupendra-dudhwal/kart-challenge/pkg/logger"
+	"gorm.io/gorm"
 
 	"github.com/bhupendra-dudhwal/kart-challenge/internal/core/ports"
 	egressPorts "github.com/bhupendra-dudhwal/kart-challenge/internal/core/ports/egress"
@@ -33,13 +36,17 @@ type appBuilder struct {
 	config *models.Config
 	logger ports.LoggerPorts
 
+	dbClient *gorm.DB
+
 	handler fasthttp.RequestHandler
 	server  *fasthttp.Server
 
 	orderServicePorts   ingressPorts.OrderServicePorts
 	productServicePorts ingressPorts.ProductServicePorts
 
-	cacheRepository egressPorts.CacheRepository
+	cacheRepository   egressPorts.CacheRepository
+	orderRepository   egressPorts.OrderRepository
+	productRepository egressPorts.ProductRepository
 }
 
 func NewAppBuilder(ctx context.Context) *appBuilder {
@@ -88,7 +95,6 @@ func (a *appBuilder) LoadConfig(configFile string) error {
 
 	a.config = &cfg
 
-	a.processCouponData()
 	log.Printf("Config loaded successfully from %s, duration(Micro Sec): %d\n", absPath, time.Since(start).Microseconds())
 	return nil
 }
@@ -101,42 +107,65 @@ func (a *appBuilder) SetLogger() (ports.LoggerPorts, error) {
 		return nil, err
 	}
 	a.logger = loggerPorts
-	loggerPorts.Info("Logger initialized successfully",
-		zap.String("level", a.config.Logger.Level.String()), zap.String("environment", a.config.App.Environment.String()),
-		zap.Int64("duration(Micro Sec)", time.Since(start).Microseconds()),
-	)
+	loggerPorts.Info("Logger initialized successfully", zap.Int64("duration(Micro Sec)", time.Since(start).Microseconds()))
+
 	return loggerPorts, nil
 }
 
 func (a *appBuilder) SetRedisClientrepository() error {
 	start := time.Now()
-	log.Println("Initializing SetRedisClient")
+	a.logger.Info("Initializing SetRedisClient")
 
 	redisClient, err := cache.NewCache(a.config.Cache, a.logger).Connect(a.ctx)
 	if err != nil {
 		return fmt.Errorf("cache connection err: %w", err)
 	}
 
-	a.cacheRepository = repository.NewRepository(redisClient)
+	a.cacheRepository = cacheRepository.NewRepository(redisClient)
 
-	a.logger.Info("Redis initialized successfully",
-		zap.String("level", a.config.Logger.Level.String()), zap.String("environment", a.config.App.Environment.String()),
-		zap.Int64("duration(Micro Sec)", time.Since(start).Microseconds()),
-	)
+	a.logger.Info("Redis initialized successfully", zap.Int64("duration(Micro Sec)", time.Since(start).Microseconds()))
 	return err
+}
+
+func (a *appBuilder) ProcessCouponData() error {
+	start := time.Now()
+
+	a.logger.Info("Initializing ProcessCouponData")
+	if err := a.processCouponData(); err != nil {
+		if !a.config.CouponConfig.IgnoreUnzipErrors {
+			return err
+		}
+	}
+
+	a.logger.Info("Coupon data initialized successfully", zap.Int64("duration(Micro Sec)", time.Since(start).Microseconds()))
+
+	return nil
+}
+
+func (a *appBuilder) SetDatabaseRepository() error {
+	start := time.Now()
+
+	a.logger.Info("Initializing SetDatabaseRepository")
+	dbClient, err := database.NewDatabase(a.config.Database, a.logger).Connect()
+	if err != nil {
+		return err
+	}
+	a.dbClient = dbClient
+	a.orderRepository = databaseRepository.NewOrderRepository(dbClient)
+	a.productRepository = databaseRepository.NewProductRepository(dbClient)
+
+	a.logger.Info("repository initialized successfully", zap.Int64("duration(Micro Sec)", time.Since(start).Microseconds()))
+	return nil
 }
 
 func (a *appBuilder) SetServices() error {
 	start := time.Now()
 	a.logger.Info("Initializing services", zap.String("component", "app_builder"), zap.String("step", "SetServices"))
 
-	a.orderServicePorts = services.NewOrderService(a.config, a.logger)
-	a.productServicePorts = services.NewProductService(a.config, a.logger)
+	a.orderServicePorts = services.NewOrderService(a.config, a.logger, a.orderRepository, a.cacheRepository, a.productRepository)
+	a.productServicePorts = services.NewProductService(a.config, a.logger, a.productRepository)
 
-	a.logger.Info("Services initialized successfully",
-		zap.String("component", "app_builder"), zap.String("step", "SetServices"),
-		zap.Int64("duration(Micro Sec)", time.Since(start).Microseconds()),
-	)
+	a.logger.Info("Services initialized successfully", zap.Int64("duration(Micro Sec)", time.Since(start).Microseconds()))
 	return nil
 }
 

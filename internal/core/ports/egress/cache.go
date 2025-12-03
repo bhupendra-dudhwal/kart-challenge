@@ -13,5 +13,6 @@ type CacheConnectionPorts interface {
 
 type CacheRepository interface {
 	SAdd(ctx context.Context, key string, members ...interface{}) error
+	BFExists(ctx context.Context, filterName string, value string) (bool, error)
 	Do(ctx context.Context, args []interface{}) error
 }

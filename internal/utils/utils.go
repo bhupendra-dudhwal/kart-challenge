@@ -5,7 +5,9 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -36,11 +38,6 @@ func CtxValue[T any](ctx context.Context, key constants.CtxKey) (T, bool) {
 	return ctxValue[T](v)
 }
 
-func PathParamValue[T any](ctx *fasthttp.RequestCtx, key string) (T, bool) {
-	v := ctx.UserValue(key)
-	return ctxValue[T](v)
-}
-
 func HeaderValue[T any](ctx *fasthttp.RequestCtx, key string) (T, bool) {
 	raw := ctx.Request.Header.Peek(key)
 	if raw == nil {
@@ -51,13 +48,56 @@ func HeaderValue[T any](ctx *fasthttp.RequestCtx, key string) (T, bool) {
 }
 
 func ctxValue[T any](v any) (T, bool) {
+	var zero T
 	if v == nil {
-		var zero T
 		return zero, false
 	}
 
-	value, ok := v.(T)
-	return value, ok
+	switch any(zero).(type) {
+	case string:
+		strVal, ok := v.(string)
+		if !ok {
+			return zero, false
+		}
+		return any(strVal).(T), true
+	case int64:
+		var strVal string
+		switch t := v.(type) {
+		case string:
+			strVal = t
+		case []byte:
+			strVal = string(t)
+		default:
+			return zero, false
+		}
+		num, err := strconv.ParseInt(strVal, 10, 64)
+		if err != nil {
+			return zero, false
+		}
+		return any(num).(T), true
+	case int:
+		var strVal string
+		switch t := v.(type) {
+		case string:
+			strVal = t
+		case []byte:
+			strVal = string(t)
+		default:
+			return zero, false
+		}
+		num, err := strconv.Atoi(strVal)
+		if err != nil {
+			return zero, false
+		}
+		return any(num).(T), true
+	default:
+		return zero, false
+	}
+}
+
+func PathParamValue[T any](ctx *fasthttp.RequestCtx, key string) (T, bool) {
+	v := ctx.UserValue(key)
+	return ctxValue[T](v)
 }
 
 func convert[T any](v []byte) (T, bool) {
@@ -179,4 +219,14 @@ func ValidateCode(code string, cfg *models.CouponValidator) bool {
 	}
 
 	return true
+}
+
+func Sanitize(str string) string {
+	clean := strings.TrimSpace(str)
+	return strings.ToValidUTF8(clean, "")
+}
+
+func RoundFloat64(value float64, precision int) float64 {
+	factor := math.Pow(10, float64(precision))
+	return math.Round(value*factor) / factor
 }

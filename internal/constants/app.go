@@ -91,3 +91,10 @@ func (key AllowedCharacters) IsValid() bool {
 		return false
 	}
 }
+
+type ProcesssStep string
+
+const (
+	ADD    ProcesssStep = "add"
+	UPDATE ProcesssStep = "update"
+)

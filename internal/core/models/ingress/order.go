@@ -3,21 +3,11 @@ package ingress
 import "time"
 
 type Order struct {
-	Id        string    `json:"id"`
-	Total     float64   `json:"total"`
-	Discounts float64   `json:"discounts,omitempty"`
-	Products  []Product `json:"products,omitempty"`
-	Items     []Item    `json:"items"`
-	CreatedAt time.Time `json:"createdAt"`
-}
+	Id         int64    `json:"id" gorm:"primaryKey;autoIncrement"`
+	Total      float64  `json:"total" gorm:"not null"`
+	Discounts  *float64 `json:"discounts,omitempty"`
+	CouponCode string   `json:"couponCode,omitempty"`
 
-type Item struct {
-	ProductId string    `json:"productId"`
-	Quantity  int       `json:"quantity"`
-	Products  []Product `json:"products"`
-}
-
-type OrderReq struct {
-	Items      []Item `json:"items"`
-	CouponCode string `json:"couponCode"`
+	Items     []Item    `json:"items" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+	CreatedAt time.Time `json:"createdAt" gorm:"autoCreateTime"`
 }

@@ -16,6 +16,7 @@ type Config struct {
 	ApiKey       *ApiKey       `yaml:"apiKey"`
 	CouponConfig *CouponConfig `yaml:"couponConfig"`
 	Cache        *Cache        `yaml:"cache"`
+	Database     *Database     `yaml:"database"`
 }
 
 func (c Config) Validate() error {
@@ -29,13 +30,13 @@ func (c Config) Validate() error {
 }
 
 type App struct {
-	Environment          constants.Environment `yaml:"environment"`
-	Port                 int                   `yaml:"port"`
-	GracefulShutdownTime time.Duration         `yaml:"gracefulShutdownTime"`
+	Environment constants.Environment `yaml:"environment"`
+	Server      *Server               `yaml:"server"`
 }
 
 func (a App) Validate() error {
 	return validation.ValidateStruct(&a,
+		validation.Field(&a.Server, validation.Required, validation.NotNil),
 		validation.Field(&a.Environment, validation.Required, validation.By(func(value interface{}) error {
 			env, _ := value.(constants.Environment)
 			if !env.IsValid() {
@@ -43,14 +44,25 @@ func (a App) Validate() error {
 			}
 			return nil
 		})),
-		validation.Field(&a.Port, validation.Required, validation.By(func(value interface{}) error {
+	)
+}
+
+type Server struct {
+	Compression          bool          `yaml:"compression"`
+	GracefulShutdownTime time.Duration `yaml:"gracefulShutdownTime"`
+	Port                 int           `yaml:"port"`
+}
+
+func (s Server) Validate() error {
+	return validation.ValidateStruct(&s,
+		validation.Field(&s.Port, validation.Required, validation.By(func(value interface{}) error {
 			port, _ := value.(int)
 			if port < 1 || port > 65535 {
 				return fmt.Errorf("invalid port number: %d", port)
 			}
 			return nil
 		})),
-		validation.Field(&a.GracefulShutdownTime, validation.Required, validation.Min(5*time.Second), validation.Max(5*time.Minute)),
+		validation.Field(&s.GracefulShutdownTime, validation.Required, validation.Min(5*time.Second), validation.Max(5*time.Minute)),
 	)
 }
 
@@ -133,6 +145,7 @@ type Cache struct {
 	Name           int           `yaml:"name"`
 	Host           string        `yaml:"host"`
 	Username       string        `yaml:"username"`
+	Password       string        `yaml:"password"`
 	Port           int           `yaml:"port"`
 	PoolSize       int           `yaml:"poolSize"`
 	MinIdleConns   int           `yaml:"minIdleConns"`
@@ -163,5 +176,40 @@ func (c Cache) Validate() error {
 		validation.Field(&c.ConnectRetries, validation.Required, validation.Min(1)),
 		validation.Field(&c.RetryInterval, validation.Required, validation.Min(time.Millisecond)),
 		validation.Field(&c.TTL, validation.Required, validation.Min(time.Millisecond)),
+	)
+}
+
+type Database struct {
+	Debug          bool          `yaml:"debug"`
+	Name           string        `yaml:"name"`
+	Host           string        `yaml:"host"`
+	Username       string        `yaml:"username"`
+	Password       string        `yaml:"password"`
+	Port           int           `yaml:"port"`
+	Timezone       string        `yaml:"timezone"`
+	Sslmode        string        `yaml:"sslmode"`
+	MaxIdleConns   int           `yaml:"maxIdleConns"`
+	MaxOpenConns   int           `yaml:"maxOpenConns"`
+	ConnMaxLife    time.Duration `yaml:"connMaxLife"`
+	ConnMaxIdle    time.Duration `yaml:"connMaxIdle"`
+	ConnectRetries int           `yaml:"connectRetries"`
+	RetryInterval  time.Duration `yaml:"retryInterval"`
+}
+
+func (d Database) Validate() error {
+	return validation.ValidateStruct(&d,
+		validation.Field(&d.Name, validation.Required),
+		validation.Field(&d.Port, validation.Required, validation.Min(1111)),
+		validation.Field(&d.Host, validation.Required),
+		validation.Field(&d.Username, validation.Required),
+		validation.Field(&d.Password, validation.Required),
+		validation.Field(&d.Timezone, validation.Required),
+		validation.Field(&d.Sslmode, validation.Required),
+		validation.Field(&d.MaxIdleConns, validation.Required, validation.Min(10)),
+		validation.Field(&d.MaxOpenConns, validation.Required, validation.Min(5)),
+		validation.Field(&d.ConnMaxLife, validation.Required),
+		validation.Field(&d.ConnMaxIdle, validation.Required),
+		validation.Field(&d.ConnectRetries, validation.Required, validation.Min(3)),
+		validation.Field(&d.RetryInterval, validation.Required),
 	)
 }

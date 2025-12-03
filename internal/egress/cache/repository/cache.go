@@ -18,10 +18,6 @@ func NewRepository(redisClient *redis.Client) egressPorts.CacheRepository {
 	}
 }
 
-func (c *cacheRepository) Add() {
-
-}
-
 func (c *cacheRepository) SAdd(ctx context.Context, key string, members ...interface{}) error {
 	if err := c.redisClient.SAdd(ctx, key, members...).Err(); err != nil {
 		return fmt.Errorf("redis SAdd error: %w", err)
@@ -34,4 +30,12 @@ func (c *cacheRepository) Do(ctx context.Context, args []interface{}) error {
 		return fmt.Errorf("redis do error: %w", err)
 	}
 	return nil
+}
+
+func (c *cacheRepository) BFExists(ctx context.Context, filterName string, value string) (bool, error) {
+	res, err := c.redisClient.Do(ctx, "BF.EXISTS", filterName, value).Bool()
+	if err != nil {
+		return false, fmt.Errorf("redis BF.EXISTS error: %w", err)
+	}
+	return res, nil
 }

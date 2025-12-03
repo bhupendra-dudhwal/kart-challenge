@@ -12,9 +12,10 @@ import (
 type middlewareFuc func(fasthttp.RequestHandler) fasthttp.RequestHandler
 
 type handler struct {
-	config *models.Config
-	logger ports.LoggerPorts
-	route  *router.Router
+	config          *models.Config
+	logger          ports.LoggerPorts
+	route           *router.Router
+	middlewarePorts ingressPorts.MiddlewarePorts
 }
 
 func chainMiddleware(base fasthttp.RequestHandler, middlewares ...middlewareFuc) fasthttp.RequestHandler {
@@ -33,13 +34,13 @@ func NewHandler(config *models.Config, logger ports.LoggerPorts, middlewarePorts
 		middlewarePorts.RequestId,
 		middlewarePorts.PanicRecover,
 		middlewarePorts.EnsureJSON,
-		middlewarePorts.Authorization,
 	)
 
 	return commonMiddlewareHandlers, &handler{
-		config: config,
-		logger: logger,
-		route:  r,
+		config:          config,
+		logger:          logger,
+		route:           r,
+		middlewarePorts: middlewarePorts,
 	}
 }
 
@@ -49,7 +50,5 @@ func (h *handler) SetProductHandler(productServicePorts ingressPorts.ProductServ
 }
 
 func (h *handler) SetOrderHandler(orderServicePorts ingressPorts.OrderServicePorts) {
-	h.route.GET("/api/v1/orders", orderServicePorts.ListOrders)
-	h.route.GET("/api/v1/orders/{orderId}", orderServicePorts.GetOrder)
-	h.route.POST("/api/v1/orders", orderServicePorts.CreateOrder)
+	h.route.POST("/api/v1/orders", h.middlewarePorts.Authorization(orderServicePorts.CreateOrder))
 }
