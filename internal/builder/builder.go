@@ -188,6 +188,13 @@ func (a *appBuilder) SetHandlers() error {
 }
 
 func (a *appBuilder) Build() (*fasthttp.Server, *models.App) {
-	a.server.Handler = a.handler
+	handler := a.handler
+	if a.config.App.Server.Compression {
+		handler = fasthttp.CompressHandlerLevel(
+			a.handler,
+			fasthttp.CompressBestSpeed,
+		)
+	}
+	a.server.Handler = handler
 	return a.server, a.config.App
 }
